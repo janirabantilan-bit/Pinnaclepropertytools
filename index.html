@@ -80,8 +80,8 @@
         table.style.display = 'none';
 
         // REPLACE THIS STRING WITH YOUR ACTUAL APIFY TOKEN COPIED IN STEP 1
-        const APIFY_TOKEN = "PASTE_YOUR_APIFY_TOKEN_HERE"; 
-
+        const APIFY_TOKEN = "apify_api_ZSFaQwRxbJlw6jvdVGoGB4LnZiMwK90exhPY"; 
+    
         try {
             // Step A: Trigger the CrowdPull Zillow Scraper on Apify (Runs synchronously for easy handling)
             const response = await fetch(`https://api.apify.com/v2/act-tasks/crowdpull~zillow-listings-scraper-task/run-sync-get-dataset-items?token=${APIFY_TOKEN}`, {
