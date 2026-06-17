@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Austin Zillow Property Search</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 600px; margin: 40px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h2 { text-align: center; color: #006aff; margin-top: 0; }
+        .search-box { display: flex; gap: 10px; margin-bottom: 25px; }
+        input { flex: 1; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px; outline: none; }
+        input:focus { border-color: #006aff; }
+        button { padding: 12px 20px; background-color: #006aff; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #0055cc; }
+        .loading { display: none; text-align: center; font-style: italic; color: #666; margin: 20px 0; }
+        .error { display: none; color: #d93838; background: #fdf2f2; padding: 12px; border-radius: 6px; margin-bottom: 20px; text-align: center; }
+        .results-table { width: 100%; border-collapse: collapse; margin-top: 20px; display: none; }
+        .results-table th, .results-table td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        .results-table th { background-color: #f8f9fa; font-weight: 600; width: 40%; }
+        a { color: #006aff; text-decoration: none; font-weight: bold; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Austin Property Search</h2>
+    
+    <div class="search-box">
+        <input type="text" id="addressInput" placeholder="Enter full address (e.g. 123 Main St, Austin, TX)">
+        <button onclick="searchAddress()">Search</button>
+    </div>
+
+    <div id="loadingStatus" class="loading">Searching Zillow data via Apify cloud (takes ~15-30 seconds)...</div>
+    <div id="errorStatus" class="error"></div>
+
+    <table id="resultsTable" class="results-table">
+        <tr><th>Type:</th><td id="resType">Single Family</td></tr>
+        <tr><th>Neighborhood Name:</th><td id="resNeighborhood">N/A</td></tr>
+        <tr><th>Beds/Baths:</th><td id="resBedsBaths">N/A</td></tr>
+        <tr><th>Stories:</th><td id="resStories">N/A</td></tr>
+        <tr><th>Square Ft:</th><td id="resSqFt">N/A</td></tr>
+        <tr><th>Lot size:</th><td id="resLot">N/A</td></tr>
+        <tr><th>Year Built:</th><td id="resYear">N/A</td></tr>
+        <tr><th>HOA:</th><td id="resHoa">N/A</td></tr>
+        <tr><th>Zestimate:</th><td id="resZestimate">N/A</td></tr>
+        <tr><th>Zillow Link:</th><td><a id="resLink" href="#" target="_blank">View Listing</a></td></tr>
+        <tr><th>Region in Austin:</th><td id="resRegion">N/A</td></tr>
+    </table>
+</div>
+
+<script>
+    // Local, free Austin Region map by Zipcode
+    const austinRegions = {
+        "78701": "Downtown", "78702": "East Austin", "78703": "Central / West Austin", "78704": "South Austin",
+        "78705": "Central / UT Campus", "78741": "Southeast Austin", "78746": "Westlake / West Austin",
+        "78751": "North Central", "78759": "North Austin / Northwest", "78745": "South Austin"
+    };
+
+    function extractZip(address) {
+        const match = address.match(/\b\d{5}\b/);
+        return match ? match[0] : null;
+    }
+
+    async function searchAddress() {
+        const address = document.getElementById('addressInput').value.trim();
+        const loader = document.getElementById('loadingStatus');
+        const errorDiv = document.getElementById('errorStatus');
+        const table = document.getElementById('resultsTable');
+
+        if (!address) {
+            alert("Please type an address first!");
+            return;
+        }
+
+        // Reset state
+        loader.style.display = 'block';
+        errorDiv.style.display = 'none';
+        table.style.display = 'none';
+
+        // REPLACE THIS STRING WITH YOUR ACTUAL APIFY TOKEN COPIED IN STEP 1
+        const APIFY_TOKEN = "PASTE_YOUR_APIFY_TOKEN_HERE"; 
+
+        try {
+            // Step A: Trigger the CrowdPull Zillow Scraper on Apify (Runs synchronously for easy handling)
+            const response = await fetch(`https://api.apify.com/v2/act-tasks/crowdpull~zillow-listings-scraper-task/run-sync-get-dataset-items?token=${APIFY_TOKEN}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    "searchQueries": [address],
+                    "includeDetails": true,
+                    "maxItems": 1
+                })
+            });
+
+            if (!response.ok) throw new Error("Failed to communicate with Apify cloud runner.");
+
+            const data = await response.json();
+            
+            if (!data || data.length === 0) {
+                throw new Error("No properties found matching that exact address string.");
+            }
+
+            const property = data[0];
+
+            // Map standard layout variables
+            document.getElementById('resType').innerText = property.homeType || "Single Family";
+            document.getElementById('resNeighborhood').innerText = property.scissorsNeighborhood || "N/A";
+            document.getElementById('resBedsBaths').innerText = `${property.bedrooms || '0'} Beds / ${property.bathrooms || '0'} Baths`;
+            document.getElementById('resStories').innerText = property.resoFacts?.stories || "N/A";
+            document.getElementById('resSqFt').innerText = property.livingArea ? `${property.livingArea} sq ft` : "N/A";
+            document.getElementById('resLot').innerText = property.lotSize ? `${(property.lotSize / 43560).toFixed(2)} acres` : "N/A";
+            document.getElementById('resYear').innerText = property.yearBuilt || "N/A";
+            document.getElementById('resHoa').innerText = property.hoaFee ? `$${property.hoaFee}/mo` : "$0 / None";
+            document.getElementById('resZestimate').innerText = property.zestimate ? `$${property.zestimate.toLocaleString()}` : "N/A";
+            document.getElementById('resLink').href = property.url || `https://www.zillow.com/homes/${encodeURIComponent(address)}_rb/`;
+
+            // Process local free calculation for Austin Region
+            const zip = extractZip(address);
+            document.getElementById('resRegion').innerText = austinRegions[zip] || "Greater Austin Area / Outer Limits";
+
+            // Show table data
+            loader.style.display = 'none';
+            table.style.display = 'table';
+
+        } catch (err) {
+            loader.style.display = 'none';
+            errorDiv.innerText = err.message || "An unexpected error occurred.";
+            errorDiv.style.display = 'block';
+        }
+    }
+</script>
+</body>
+</html>
